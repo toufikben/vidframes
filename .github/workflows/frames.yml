@@ -7,33 +7,36 @@ jobs:
   sheets:
     runs-on: ubuntu-latest
     steps:
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
       - name: Download clips
         run: |
-          set -e
           mkdir -p clips out
-          gh release download v1 --repo "${{ github.repository }}" --dir clips --pattern "*.mp4"
-          ls -l clips
+          gh release download v1 --repo "${{ github.repository }}" --dir clips --pattern "*.mp4" 2>&1 | tee out/log.txt
+          ls -l clips | tee -a out/log.txt
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Probe
-        run: |
-          set -e
-          for f in clips/*.mp4; do
-            echo "== $f" | tee -a out/probe.txt
-            ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$f" | tee -a out/probe.txt
-            ffprobe -v error -show_entries format=duration -of csv=p=0 "$f" | tee -a out/probe.txt
-          done
-
       - name: Stills
         run: |
+          run() { echo "\$ $*" >> out/log.txt; "$@" >> out/log.txt 2>&1; echo "exit=$?" >> out/log.txt; }
           for f in clips/*.mp4; do
             b=$(basename "$f" .mp4)
-            for t in 6 14 22 28; do
-              ffmpeg -nostdin -y -loglevel error -ss "$t" -i "$f" -frames:v 1 "out/$b-t$t.png" || echo "fail $b $t"
+            run ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -show_entries format=duration -of default=nw=1 "$f"
+            for t in 5 10 15 20 25 30; do
+              run ffmpeg -nostdin -y -loglevel error -ss "$t" -i "$f" -frames:v 1 -vf scale=720:-1 "out/$b-t$t.png"
             done
+            # Nine-tile contact sheet of the moving part.
+            run ffmpeg -nostdin -y -loglevel error -i "$f" -vf "fps=1/4,scale=300:-1,tile=3x3" -frames:v 1 "out/$b-sheet.png"
+            # Enlarged crop around the puck to judge the head.
+            run ffmpeg -nostdin -y -loglevel error -ss 18 -i "$f" -frames:v 1 -vf "crop=240:240:240:520,scale=600:600" "out/$b-head.png"
           done
-          ls -l out
+          ls -l out | tee -a out/log.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
