@@ -17,7 +17,7 @@ jobs:
       - name: Download clips
         run: |
           mkdir -p clips out
-          gh release download v1 --repo "${{ github.repository }}" --dir clips --pattern "*.mp4" 2>&1 | tee out/log.txt
+          gh release download v2 --repo "${{ github.repository }}" --dir clips --pattern "*.mp4" 2>&1 | tee out/log.txt
           ls -l clips | tee -a out/log.txt
         env:
           GH_TOKEN: ${{ github.token }}
